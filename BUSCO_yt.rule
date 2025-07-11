@@ -1,0 +1,241 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time : 2021/9/15 17:30
+# @Author : "Tong Ye"
+# @Email : 
+# @File : BUSCO.rule
+# @Software: PyCharm
+
+'''
+
+use method：
+    1. running process：
+       snakemake -s BUSCO.rule -p --show-failed-logs --cores 60
+
+'''
+import itertools
+import os
+import re
+
+from snakemake.io import expand, glob_wildcards
+
+db_path = "/home/yetong/busco_data/BUSCO/cyanobacteria_odb10"
+# eukaryota_path = "/home/zhangdong/works/NGS/ZD/Cestoda/shutu/BUSCO/eukaryota_odb10"
+input_dir_cds = os.getcwd() + "/BUSCO/Input/CDS"
+BUSCO_dir_cds = os.getcwd() + "/BUSCO/Output/CDS"
+input_dir_pep = os.getcwd() + "/BUSCO/Input/protein"
+BUSCO_dir_pep = os.getcwd() + "/BUSCO/Output/protein"
+input_dir_genome = os.getcwd() + "/BUSCO/Input/genome"
+# input_dir_CDS = os.getcwd() + "/BUSCO/Input/CDS"
+BUSCO_dir_genome = os.getcwd() + "/BUSCO/Output/genome"
+augustus_spe = "/home/zhangdong/works/NGS/ZD/Cestoda/shutu/AUGUSTUS/config/species/Taenia_sp"
+mode_pro = "proteins" # genome, proteins, transcriptome
+mode_cds = "transcriptome" # genome, proteins, transcriptome
+mode_genome = "genome"
+threads = 20
+quast_dir = f"{os.getcwd()}/quast"
+sample = "SZTC"
+quast_exe = "quast"
+
+sample_cds, source_cds, = glob_wildcards("%s/{sample}.{source}.fasta" % input_dir_cds)
+sample_pep, = glob_wildcards("%s/{sample}.fasta" % input_dir_pep)
+sample_genome, = glob_wildcards("%s/{sample}.fasta" % input_dir_genome)
+
+# import shutil
+# # 保证quast重新执行
+# if os.path.exists(quast_dir):
+#     shutil.rmtree(quast_dir)
+
+def find_file(wildcards, input_dir, source):
+    # list_combination = itertools.product([wildcards.sample], list(set(source)))
+    list_combination = itertools.product([wildcards.sample], [source])
+    file_ok = ""
+    for file in list_combination:
+        if os.path.exists(f"{input_dir}/{'.'.join(file)}.fasta"):
+            file_ok = f"{input_dir}/{'.'.join(file)}.fasta"
+    # for debug
+    if not file_ok:
+        print(wildcards.sample, source)
+    return file_ok
+
+rule end:
+    input:
+        "%s/allbusco.csv"% BUSCO_dir_cds,
+        "%s/allbusco.csv"% BUSCO_dir_pep,
+        "%s/allbusco.csv"% BUSCO_dir_genome,
+        # "%s/%s"%(quast_dir, sample)
+        # expand("%s/{sample}/BUSCO/{sample}_busco_log.cp.txt" % BUSCO_dir, sample=sample),
+        # expand("%s/{sample}/BUSCO_eukaryota/{sample}_busco_log.txt" % BUSCO_dir, sample=sample),
+        # expand("%s/{sample}/BUSCO4/{sample}_busco_log.cp.txt" % BUSCO_dir, sample=sample)
+
+rule BUSCO_cds_metazoa:
+    input:
+        # lambda wildcards: find_file(wildcards, input_dir_cds, wildcards.source_cds)
+        "%s/{sample}.{source_cds}.fasta"%input_dir_cds
+    output:
+        "%s/{sample}_{source_cds}/{sample}_busco_log.cp.txt" % BUSCO_dir_cds
+    log:
+        "%s/{sample}_{source_cds}/{sample}_busco_log.txt" % BUSCO_dir_cds
+    params:
+        mode = mode_cds,
+        lineage = db_path
+    threads:
+        threads
+    shell:
+        # check current set flags
+        "echo \"$-\"; \n"
+        "source /apps/zhangdong/Anaconda/etc/profile.d/conda.sh && conda activate BUSCO5; \n"
+        # ## Confirm that set flags are same as prior to conda activate command
+        "echo \"$-\"; \n"
+        "cd `dirname {output}`; \n"
+        "busco -i {input} -o {wildcards.sample} -m {params.mode} "
+        "-l {params.lineage} -f -c {threads} &> {log} 2>&1; \n"
+        "cp {log} {output}; \n"
+        "conda deactivate; \n"
+
+# rule BUSCO_pep_metazoa:
+#     input:
+#         # lambda wildcards: find_file(wildcards, input_dir_pep, wildcards.source_pep)
+#         "%s/{sample}.{source_pep}.fasta"%input_dir_pep
+#     output:
+#         "%s/{sample}_{source_pep}/{sample}_busco_log.cp.txt" % BUSCO_dir_pep
+#     log:
+#         "%s/{sample}_{source_pep}/{sample}_busco_log.txt" % BUSCO_dir_pep
+#     params:
+#         mode = mode_pro,
+#         lineage = db_path
+#     threads:
+#         threads
+#     shell:
+#         # check current set flags
+#         "echo \"$-\"; \n"
+#         "source /apps/zhangdong/Anaconda/etc/profile.d/conda.sh && conda activate BUSCO5; \n"
+#         # ## Confirm that set flags are same as prior to conda activate command
+#         "echo \"$-\"; \n"
+#         "cd `dirname {output}` \n"
+#         "busco -i {input} -o {wildcards.sample} -m {params.mode} "
+#         "-l {params.lineage} -f -c {threads} &> {log} 2>&1; \n"
+#         "cp {log} {output}; \n"
+#         "conda deactivate; \n"
+
+rule BUSCO_pep_metazoa:
+    input:
+        # lambda wildcards: find_file(wildcards, input_dir_pep, wildcards.source_pep)
+        "%s/{sample}.fasta"%input_dir_pep
+    output:
+        "%s/{sample}/{sample}_busco_log.cp.txt" % BUSCO_dir_pep
+    log:
+        "%s/{sample}/{sample}_busco_log.txt" % BUSCO_dir_pep
+    params:
+        mode = mode_pro,
+        lineage = db_path
+    threads:
+        threads
+    shell:
+        # check current set flags
+        "echo \"$-\"; \n"
+        "source /apps/zhangdong/Anaconda/etc/profile.d/conda.sh && conda activate BUSCO5; \n"
+        # ## Confirm that set flags are same as prior to conda activate command
+        "echo \"$-\"; \n"
+        "cd `dirname {output}` \n"
+        "busco -i {input} -o {wildcards.sample} -m {params.mode} "
+        "-l {params.lineage} -f -c {threads} &> {log} 2>&1; \n"
+        "cp {log} {output}; \n"
+        "conda deactivate; \n"
+
+rule BUSCO_genome_metazoa:
+    input:
+        "%s/{sample}.fasta"%input_dir_genome
+    output:
+        "%s/{sample}/{sample}_busco_log.cp.txt" % BUSCO_dir_genome
+    log:
+        "%s/{sample}/{sample}_busco_log.txt" % BUSCO_dir_genome
+    params:
+        mode = mode_genome,
+        lineage = db_path
+    threads:
+        threads
+    shell:
+        # check current set flags
+        "echo \"$-\"; \n"
+        "source /apps/zhangdong/Anaconda/etc/profile.d/conda.sh && conda activate BUSCO5; \n"
+        # ## Confirm that set flags are same as prior to conda activate command
+        "echo \"$-\"; \n"
+        "cd `dirname {output}`; \n"
+        "busco -i {input} -o {wildcards.sample} -m {params.mode} "
+        "-l {params.lineage} -f -c {threads} &> {log} 2>&1; \n"
+        "cp {log} {output}; \n"
+        "conda deactivate; \n"
+
+# rule BUSCO_cds_eukaryota:
+#     input:
+#         find_file
+#     output:
+#         "%s/{sample}/BUSCO_eukaryota/{sample}_busco_log.cp.txt" % BUSCO_dir,
+#     log:
+#         "%s/{sample}/BUSCO_eukaryota/{sample}_busco_log.txt" % BUSCO_dir
+#     params:
+#         mode = mode_cds,
+#         lineage = eukaryota_path
+#     threads:
+#         threads
+#     conda:
+#         "BUSCO5_conda.yaml"
+#     shell:
+#         "cd `dirname {output}` && "
+#         "busco -i {input} -o {wildcards.sample} -m {params.mode} "
+#         "-l {params.lineage} -f -c {threads} &> {log} 2>&1;"
+#         "cp {log} {output}"
+
+def sum_busco(allfiles, output):
+    files = list(set(str(allfiles).split()))
+    buscos = "name,C,S,D,F,M,n\n"
+    for file in files:
+        with open(file) as f:
+            content = f.read()
+            rgx = re.compile(r"\|C:([^\[]+?)\[S:([^:]+),D:([^\]]+)\],F:([^,]+),M:([^,]+),n:(\d+)")
+            if rgx.search(content):
+                C,S,D,F,M,n = rgx.findall(content)[0]
+                buscos += f"{os.path.basename(os.path.dirname(file))},{C},{S},{D},{F},{M},{n}\n"
+    with open(output, "w") as f2:
+        f2.write(buscos)
+
+rule display_all_busco:
+    input:
+         cds = expand("%s/{sample}_{source_cds}/{sample}_busco_log.cp.txt" % BUSCO_dir_cds,
+             sample=sample_cds, source_cds=source_cds),
+         # pep = expand("%s/{sample}_{source_pep}/{sample}_busco_log.cp.txt" % BUSCO_dir_pep,
+         #     sample=sample_pep, source_pep=source_pep),
+         pep = expand("%s/{sample}/{sample}_busco_log.cp.txt" % BUSCO_dir_pep,
+             sample=sample_pep),
+         genome = expand("%s/{sample}/{sample}_busco_log.cp.txt" % BUSCO_dir_genome,
+             sample=sample_genome)
+    output:
+         cds = "%s/allbusco.csv"% BUSCO_dir_cds,
+         pep = "%s/allbusco.csv"% BUSCO_dir_pep,
+         genome = "%s/allbusco.csv"% BUSCO_dir_genome
+    run:
+        # print(input.cds)
+        sum_busco(input.cds, output.cds)
+        sum_busco(input.pep, output.pep)
+        sum_busco(input.genome, output.genome)
+
+rule quast:
+    input:
+        genomes = expand("%s/{sample}.fasta"%input_dir_genome,
+            sample=sample_genome)
+    output:
+        dir = directory("%s/%s"%(quast_dir, sample))
+    log:
+        "%s/%s/quast.log"%(quast_dir, sample)
+    params:
+        exec_ = quast_exe
+    threads:
+        20
+    shell:
+        "[ ! -d {output} ] && mkdir -p {output}; \n"
+        # 去重
+        "input_genomes=`echo {input.genomes} | python -c "
+        "\"import sys;l=str(sys.stdin.read()).strip('\\n').split(' ');print(' '.join(list(set(l))))\"`; \n"
+        # "echo $input_genomes; \n"
+        "{params.exec_} -t {threads} --output-dir {output.dir} --circos $input_genomes > {log} 2>&1; \n"

@@ -1,0 +1,1 @@
+checkm lineage_wf <bin folder> <output folder> -t 100 –pplacer_thread 50 -f result4_8.tab –tab_table

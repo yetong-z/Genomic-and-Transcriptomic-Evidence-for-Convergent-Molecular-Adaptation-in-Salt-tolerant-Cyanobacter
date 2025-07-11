@@ -1,0 +1,3 @@
+# prepare InputFiles and InputTrees
+# run paml
+python batchCodeml.py PAML/paml4.9j/bin/codeml -cpu 80 -icode 6 -model 2 -NSsites 2 -omega 2 -kappa 2 -rev M0 -null MAnull > log.txt &

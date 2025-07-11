@@ -1,0 +1,26 @@
+orthofinder -f orthofinder_data/species_sequence -o orthofinder_result_2_25 -t 100 -a 100
+
+# use Single_Copy_Orthologue_Sequences to construct tree
+# use phylosuite to deal with data
+
+# use iqtree to construct
+iqtree -s concatenation_AA_414.fas -m WAG+G4+F -bb 50000 -bcor 0.90 -nt AUTO
+
+# r8s
+python2 cafetutorial_prep_r8s.py -i r8s_prepare_tree.nwk -o r8s_ctl_inputfile.txt -s 112663 -p 'Chamaesiphon_minutus_PCC_6605,Crinalium_epipsammum_PCC_9333' -c 2180
+
+/apps/zhangdong/r8s1.81/src/r8s -b -f r8s_ctl_inputfile.txt > r8s_tmp_outputfile.txt
+
+tail -n 1 r8s_tmp_outputfile.txt | cut -c 16- > 77_spp_r8s_ultrametric.txt
+
+
+# cafe
+# filter out gene families with one or more species having more than 100 gene copies and those with only one species
+python cafetutorial_clade_and_size_filter.py -i cafeinput.tsv -o cafeinput_filtered.txt -s 2> filtered.log
+# Configure cafe_run.sh file
+# run cafe
+cafe cafe_run.sh
+
+# get rapidly expanded genes
+awk -F"\t" -v OG_n=`awk '{print $2}' 892_rapid_fams.txt` 'BEGIN{split(OG_n,OG,",");for(i in OG){split(OG[i],OG0,"[");OG00[i]=OG0[1]}}NR!=1{for(k in OG00){if($1==OG00[k])print $49}}' Orthogroups.tsv > 892_rapid_genes_num.txt
+
