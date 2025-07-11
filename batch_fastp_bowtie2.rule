@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# @Time : 2022/1/2 10:22
+# @Author : "Tong Ye"
+# @Email : 
+# @File : batch_fastp.rule
+# @Software: PyCharm
+
+'''
+snakemake -s batch_fastp.rule -p -j200
+'''
+import os
+import glob
+
+from snakemake.io import glob_wildcards, expand, dynamic, directory, touch
+
+# get data
+data_dir = "/home/NGS/Rawdata_FX2021121400008"
+fastp_dir = data_dir + os.sep + "fastp"
+bowtie2_dir = data_dir + os.sep + "bowtie2"
+samples,version, = glob_wildcards("%s/{sample}.{version}.raw.fastq.gz"%data_dir)
+
+rule END:
+    input:
+        expand("%s/{sample}.fastp.bowtie2.bam" % (bowtie2_dir), sample=samples),
+        expand("%s/{sample}.fastp.bowtie2.mapping.rate.txt" % (bowtie2_dir), sample=samples),
+
+rule fastp:
+    input:
+        fq1 = "%s/{sample}.R1.raw.fastq.gz"%data_dir,
+        fq2 = "%s/{sample}.R2.raw.fastq.gz"%data_dir
+    output:
+        fq1 = "%s/{sample}_R1_fastp.fq" % (fastp_dir),
+        fq2 = "%s/{sample}_R2_fastp.fq" % (fastp_dir)
+    threads:
+        8
+    log:
+        "%s/{sample}_fastp.log" % (fastp_dir)
+    shell:
+        "cd `dirname {output.fq1}`;" \
+        "fastp -i {input.fq1} -o {output.fq1} -I {input.fq2} -O {output.fq2} "
+        "--unpaired1 {wildcards.sample}.clean.unpaired1.fastq.gz --unpaired2 {wildcards.sample}.clean.unpaired2.fastq.gz " 
+        "--detect_adapter_for_pe -z 9 -V -q 20 --length_required 30 -5 20 -3 20 -W 4 -M 20 -n 0 "
+        "-j {wildcards.sample}.fastp.json -h {wildcards.sample}.fastp.html -w 8 &> {log}"
+
+rule bowtie:
+    input:
+        fq1 = "%s/{sample}_R1_fastp.fq" % (fastp_dir),
+        fq2 = "%s/{sample}_R2_fastp.fq" % (fastp_dir),
+        genome = "/home/zhangdong/works/NGS/YT/NGS/Rawdata_FX2021121400008/FACHB-892.fna"
+    output:
+        out = "%s/{sample}.fastp.bowtie2.bam" % (bowtie2_dir)
+    threads:
+        10
+    log:
+        "%s/{sample}.fastp.bowtie2.log" % (bowtie2_dir)
+    shell:
+        "cd `dirname {output.out}`; \n"
+        "bowtie2-build {input.genome} genome.index > {log} 2>&1; \n"
+        "bowtie2 -p {threads} -x genome.index -1 {input.fq1} -2 {input.fq2} | samtools sort -O bam -@ {threads} -o - > {output.out}; \n"
+
+rule samtool_stat:
+    input:
+        bam = "%s/{sample}.fastp.bowtie2.bam" % (bowtie2_dir)
+    output:
+        out = "%s/{sample}.fastp.bowtie2.mapping.rate.txt" % (bowtie2_dir)
+    threads:
+        10
+    shell:
+        "samtools flagstat -@ {threads} {input.bam} > {output.out} 2>&1; \n"
